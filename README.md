@@ -5,7 +5,8 @@ Join-based parallel augmented map structure builder in Standard ML for testing d
 
 2.	How it works: The program essentially works like an assembly line, tacking on various functionalities at each step through the use of functors, allowing for a great degree of customization in the creation of the data structure. The first step is to define a structure which aligns with the signature TREE as defined in the program tree.sml. After that, all that is needed is to plug the structure into a series of functors which automatically define the rest of the functions needed to form the data structure you intend on using.
 
-3.	Stages of creating a tree
+3.	Stages of creating a tree:
+   
 a.	tree.sml* (TREE):  this is the only structure that requires you to actually define its functions. Here you define the type of the values paired with each key as well as the types for augmented values, base and combine functions for the augmented values, and the integer limit, which is used in our implementation of augmented values in
 
 b.	tree1.sml (TREE  TREE1): Implements many general functions used across all trees: getLChild, getRChild, getElem, hasAV, getAV, concatTree, concatTreeAV
