@@ -7,7 +7,7 @@ Join-based parallel augmented map structure builder in Standard ML for testing d
 
 3.	Stages of creating a tree:
    
-      a.	tree.sml* (TREE):  this is the only structure that requires you to actually define its functions. Here you define the type of the values paired with each key as well as the types for augmented values, base and combine functions for the augmented values, and the integer limit, which is used in our implementation of augmented values in
+      a.	tree.sml* (TREE):  this is the only structure that requires you to actually define its functions. Here you define the type of the values paired with each key as well as the types for augmented values, base and combine functions for the augmented values, and the integer limit, which is used in our implementation of augmented values.
 
       b.	tree1.sml (TREE -> TREE1): Implements many general functions used across all trees: getLChild, getRChild, getElem, hasAV, getAV, concatTree, concatTreeAV
 
