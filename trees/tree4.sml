@@ -27,10 +27,12 @@ signature TREE4 =
     val rotateLeft   : tree -> tree
     val rotateRight  : tree -> tree
     (**)
+    datatype jInput = KVIn of (int * treeValueType) | KVPIn of (int * treeValueType * int);
+
     (*creates a tree with empty subtrees from the input key and value*)
     val singleton    : (int * treeValueType) -> tree
     (*See Just Join for Parallel Ordered Sets*)
-    val join         : tree * (int * treeValueType) * tree -> tree
+    val join         : tree * jInput * tree -> tree
   end;
 
 functor AddJoinRB(T: TREE3) : TREE4 =
@@ -38,14 +40,22 @@ functor AddJoinRB(T: TREE3) : TREE4 =
   struct
     open T;
 
+    datatype jInput = KVIn of (int * treeValueType) | KVPIn of (int * treeValueType * int);
+
     val Red   = 0;
     val Black = 1;
 
     fun singleton (k: int, v: treeValueType) : tree =
       makeTree(Empty, (k, v, Black), Empty)
 
-    fun join (L: tree, (k: int, v: treeValueType), R: tree): tree =
+    fun join (L: tree, kvIn: jInput, R: tree): tree =
       let
+        val k = (case kvIn of
+                      KVIn (k, _) => k
+                    | KVPIn (k, _, _) => k)
+        val v = (case kvIn of
+                      KVIn (_, v) => v
+                    | KVPIn (_, v, _) => v)
 
         fun eToKVC (e: elem) : (int * treeValueType * int) =
           (case e of
@@ -163,11 +173,20 @@ functor AddJoinAVL (T: TREE3): TREE4 =
   struct
     open T;
 
+    datatype jInput = KVIn of (int * treeValueType) | KVPIn of (int * treeValueType * int);
+
     fun singleton (k, v): tree =
       makeTree(Empty, (k, v, 1), Empty)
 
-    fun join (L: tree, (k: int, v: treeValueType), R: tree): tree =
+    fun join (L: tree, kvIn: jInput, R: tree): tree =
       let
+        val k = (case kvIn of
+                      KVIn (k, _) => k
+                    | KVPIn (k, _, _) => k)
+        val v = (case kvIn of
+                      KVIn (_, v) => v
+                    | KVPIn (_, v, _) => v)
+
        fun getHeight(Empty) = 0
           | getHeight(Node(_, Container(_, _, h), _)) = h
           | getHeight(Node(_, AVContainer((_, _, h), _), _)) = h
@@ -268,26 +287,46 @@ functor AddJoinWB(T: TREE3): TREE4 =
   struct
     open T;
 
+    datatype jInput = KVIn of (int * treeValueType) | KVPIn of (int * treeValueType * int);
+
     val ALPHA = 0.29;
     val BETA = 1.0 - ALPHA;
 
-    fun singleton (k: int, v: treeValueType): tree =
+    (* Some of the following code encodes our chosen method of calculating
+    * weights. In this case it's just the total number of nodes in the tree. we
+    * denote these functions with a "(**)" *)
+    fun singleton (k: int, v: treeValueType): tree = (**)
       makeTree(Empty, (k, v, 1), Empty)
 
-    fun join (L, (k: int, v: treeValueType), R): tree =
+    fun join (L: tree, kvIn: jInput, R: tree): tree =
       let
+        val k = (case kvIn of
+                      KVIn (k, _) => k
+                    | KVPIn (k, _, _) => k)
+        val v = (case kvIn of
+                      KVIn (_, v) => v
+                    | KVPIn (_, v, _) => v)
+
         fun balance (i1: int, i2: int): bool =
           let
             val isum = i1 + i2
           in
-            if (Real.fromInt(i1) / Real.fromInt(isum) < ALPHA orelse
+            if (isum = 0) then true
+            else if (Real.fromInt(i1) / Real.fromInt(isum) < ALPHA orelse
             Real.fromInt(i1) / Real.fromInt(isum) > BETA) then
               false
             else
               true
           end
 
-        fun getWeight(T1: tree): int =
+        fun getWeight(Empty) = 0
+          | getWeight(Node (_, Container(_, _, w), _)) = w
+          | getWeight(Node (_, AVContainer((_, _, w), _), _)) = w
+
+        fun combineWeights (T1: tree, T2: tree): int =
+          getWeight(T1) + getWeight(T2)
+
+        fun calcWeight(T1: tree): int = (**)
           let
             fun getTreeSize(Empty) = 0
               | getTreeSize(Node(T1L, _, T1R)) = 1 + getTreeSize(T1L) + getTreeSize(T1R)
@@ -295,18 +334,25 @@ functor AddJoinWB(T: TREE3): TREE4 =
             getTreeSize(T1)
           end
 
-        fun heavy (T1: tree, T2: tree): bool =
-          let
-            val n1 = getWeight(T1)
-            val n2 = getWeight(T2)
-            val total = n1 + n2
-          in
-            (Real.fromInt(n1) / Real.fromInt(total) > BETA)
-          end
+        fun heavy (T1: tree, T2: tree): bool = getWeight(T1) > getWeight(T2)
+
+        (*Recalculate heights and augmented values stored at affected nodes after a rotate*)
+        fun rotateFixup(Empty) = Empty
+          | rotateFixup(Node (L1, Container(k1, v1, _), R1)) =
+          makeTree (L1, (k1, v1, getWeight(L1) + getWeight(R1) + 1), R1)
+          | rotateFixup(Node (L1, AVContainer((k1, v1, _), _), R1)) =
+          makeTree (L1, (k1, v1, getWeight(L1) + getWeight(R1) + 1), R1)
+
+        fun rotateRightFixup(Node(L1, e1, R1)): tree =
+          rotateFixup(Node (L1, e1, rotateFixup(R1)))
+
+        fun rotateLeftFixup(Node(L1, e1, R1)): tree =
+          rotateFixup(Node (rotateFixup(L1), e1, R1))
+        (**)
 
         fun joinRightWB (L1: tree, (k1: int, v1: treeValueType), R1: tree): tree =
           if (balance(getWeight(L1), getWeight(R1))) then 
-            makeTree(L1, (k1, v1, 0), R1)
+            makeTree(L1, (k1, v1, combineWeights(L1, R1) + 1), R1) (**)
           else
             let
               val x1 = (case L1 of
@@ -319,16 +365,19 @@ functor AddJoinWB(T: TREE3): TREE4 =
                              Node (T'L, _, T'R) => (T'L, T'R))
             in
               if (balance(getWeight(#1(x1)), getWeight(T'))) then
-                makeTree (#1(x1), (#2(x1), #3(x1), 0), T')
+                makeTree (#1(x1), (#2(x1), #3(x1), combineWeights(#1(x1), T') +
+                1), T') (**)
               else if (balance (getWeight(#1(x1)), getWeight(#1(x2))) andalso
               balance(getWeight(#1(x1)) + getWeight(#1(x2)), getWeight(#2(x2))))
-              then rotateLeft(makeTree(#1(x1), (#2(x1), #3(x1), 0), T'))
-              else rotateLeft(makeTree(#1(x1), (#2(x1), #3(x1), 0), rotateRight(T')))
+              then rotateLeftFixup(rotateLeft(makeTree(#1(x1), (#2(x1), #3(x1),
+              combineWeights(#1(x1), T') + 1), T'))) (**)
+              else rotateLeftFixup(rotateLeft(makeTree(#1(x1), (#2(x1), #3(x1),
+              combineWeights(#1(x1), T') + 1), rotateRightFixup(rotateRight(T'))))) (**)
             end
  
         fun joinLeftWB (L1: tree, (k1: int, v1: treeValueType), R1: tree): tree =
           if (balance(getWeight(L1), getWeight(R1))) then
-            makeTree(L1, (k1, v1, 0), R1)
+            makeTree(L1, (k1, v1, combineWeights(L1, R1) + 1), R1) (**)
           else
             let
               val x1 = (case R1 of
@@ -341,22 +390,27 @@ functor AddJoinWB(T: TREE3): TREE4 =
                              Node (T'L, _, T'R) => (T'L, T'R))
             in
               if (balance(getWeight(#4(x1)), getWeight(T'))) then
-                makeTree (T', (#2(x1), #3(x1), 0), #4(x1))
+                makeTree (T', (#2(x1), #3(x1), combineWeights(T', #4(x1)) + 1), #4(x1)) (**)
               else if (balance (getWeight(#4(x1)), getWeight(#2(x2))) andalso
               balance(getWeight(#4(x1)) + getWeight(#2(x2)), getWeight(#1(x2))))
-              then rotateRight(makeTree(T', (#2(x1), #3(x1), 0), #4(x1)))
-              else rotateRight(makeTree(rotateLeft(T'), (#2(x1), #3(x1), 0), #4(x1)))
+              then rotateRightFixup(rotateRight(makeTree(T', (#2(x1), #3(x1), 
+              combineWeights(T', #4(x1)) + 1), #4(x1)))) (**)
+              else
+                rotateRightFixup(rotateRight(makeTree(rotateLeftFixup(rotateLeft(T')), 
+                (#2(x1), #3(x1), combineWeights(T', #4(x1)) + 1), #4(x1)))) (**)
             end
       in
         if heavy(L, R) then joinRightWB(L, (k, v), R)
         else if heavy(R, L) then joinLeftWB(L, (k, v), R)
-        else makeTree(L, (k, v, 0), R)
+        else makeTree(L, (k, v, combineWeights(L, R) + 1), R) (**)
       end
   end;
 
 functor AddJoinTreap(T: TREE3): TREE4 =
   struct
     open T;
+
+    datatype jInput = KVIn of (int * treeValueType) | KVPIn of (int * treeValueType * int);
 
     val priorityRange: IntInf.int = 10000;
 
@@ -367,6 +421,9 @@ functor AddJoinTreap(T: TREE3): TREE4 =
         IntInf.toInt(c mod priorityRange)
       end
 
+    fun getRandInt(): int=
+      Random.randRange(0, IntInf.toInt(priorityRange)) (Random.rand(1, getSeed()))
+
     fun singleton(k: int, v: treeValueType) =
       let
         val r = Random.randRange (0, IntInf.toInt(priorityRange)) (Random.rand (1, getSeed()))
@@ -374,11 +431,20 @@ functor AddJoinTreap(T: TREE3): TREE4 =
         makeTree(Empty, (k, v, r), Empty)
       end
 
-    fun join(L, (k: int, v: treeValueType), R) =
+    fun singleton2(k: int, v: treeValueType, p: int) =
+      makeTree(Empty, (k, v, p), Empty)
+
+    fun join(L: tree, kvIn: jInput, R: tree) =
       let
-        val nextInt = Random.randRange (0, IntInf.toInt(priorityRange))
-        val r = Random.rand (1, getSeed())
-        val p = nextInt r
+        val k = (case kvIn of
+                      KVIn (k, _) => k
+                    | KVPIn (k, _, _) => k)
+        val v = (case kvIn of
+                      KVIn (_, v) => v
+                    | KVPIn (_, v, _) => v)
+        val p = (case kvIn of
+                      KVIn (_, _) => getRandInt()
+                    | KVPIn (_, _, p) => p)
 
         fun getKVP (T1: tree): (int * treeValueType * int) =
           (case T1 of
@@ -386,13 +452,13 @@ functor AddJoinTreap(T: TREE3): TREE4 =
               | Node (_, AVContainer ((k1, v1, p1), _), _) => (k1, v1, p1))
 
         fun getPriority (Empty): int = (~1)
-          | getPriority (Node(_, Container(_, _, p), _)) = p
-          | getPriority (Node(_, AVContainer((_, _, p), _), _)) = p
+          | getPriority (Node(_, Container(_, _, p1), _)) = p1
+          | getPriority (Node(_, AVContainer((_, _, p1), _), _)) = p1
 
         fun prior (i1: int, i2: int): bool = i1 > i2
 
         fun joinTreap (Empty, (k1: int, v1: treeValueType, p1: int), Empty): tree =
-          singleton (k1, v1)
+          singleton2 (k1, v1, p1)
           | joinTreap (Empty, (k1: int, v1: treeValueType, p1: int), R1): tree =
           if (prior(getPriority(R1), p1)) then
             let

@@ -27,8 +27,10 @@ signature TREE5 =
     val rotateLeft   : tree -> tree
     val rotateRight  : tree -> tree
     (**)
+    datatype jInput = KVIn of (int * treeValueType) | KVPIn of (int * treeValueType * int);
+
     val singleton    : (int * treeValueType) -> tree
-    val join         : tree * (int * treeValueType) * tree -> tree
+    val join         : tree * jInput * tree -> tree
     (**)
     val insert       : (tree * (int * treeValueType)) -> tree
 
@@ -61,14 +63,14 @@ functor AddFinalFunctions(T: TREE4) : TREE5 =
     fun insert (T1: tree, (k1: int, v1: treeValueType)): tree =
       (case T1 of
             Empty => singleton (k1, v1)
-          | (Node (L, Container (k2, v2, _), R)) =>
-              if (k1 < k2) then join(insert(L, (k1, v1)), (k2, v2), R)
-              else if (k1 > k2) then join(L, (k2, v2), insert(R, (k1, v1)))
-              else join(L, (k1, v1), R)
-          | (Node (L, AVContainer((k2, v2, _), _), R)) =>
-              if (k1 < k2) then join(insert(L, (k1, v1)), (k2, v2), R)
-              else if (k1 > k2) then join(L, (k2, v2), insert(R, (k1, v1)))
-              else join(L, (k1, v1), R)
+          | (Node (L, Container (k2, v2, b2), R)) =>
+              if (k1 < k2) then join(insert(L, (k1, v1)), KVPIn (k2, v2, b2), R)
+              else if (k1 > k2) then join(L, KVPIn (k2, v2, b2), insert(R, (k1, v1)))
+              else join(L, KVIn (k1, v1), R)
+          | (Node (L, AVContainer((k2, v2, b2), _), R)) =>
+              if (k1 < k2) then join(insert(L, (k1, v1)), KVPIn (k2, v2, b2), R)
+              else if (k1 > k2) then join(L, KVPIn (k2, v2, b2), insert(R, (k1, v1)))
+              else join(L, KVIn (k1, v1), R)
               )
 
     fun getTreeSize (Empty) = 0
@@ -148,23 +150,31 @@ functor AddFinalFunctions(T: TREE4) : TREE5 =
         val ALPHA = 0.29
         val BETA = 1.0 - ALPHA
 
-        fun getWeight(T2: tree): int = getTreeSize(T2)
+        fun getWeight(Empty) = 0
+          | getWeight(Node(_, Container (_, _, w), _)) = w
+          | getWeight(Node(_, AVContainer((_, _, w), _), _)) = w
+
+        fun calcWeight(T2: tree): int = getTreeSize(T2)
 
         fun balance (i1: int, i2: int): bool =
           let
             val isum = i1 + i2
           in
-            if ((Real.fromInt(i1) / Real.fromInt(isum) < ALPHA) orelse
+            if (isum = 0) then true
+            else if ((Real.fromInt(i1) / Real.fromInt(isum) < ALPHA) orelse
             (Real.fromInt(i1) / Real.fromInt(isum) > BETA)) then false
             else true
           end
+        val c1: bool = (getWeight(T1) = calcWeight(T1))
+        val c2: bool = balance(getWeight(getLChild(T1)),
+        getWeight(getRChild(T1)))
       in
-        (balance(getWeight(getLChild(T1)), getWeight(getRChild(T1))) andalso
-        wbTreeInvariantCheck(getLChild(T1)) andalso 
-        wbTreeInvariantCheck(getRChild(T1)))
+        ((c1(* andalso c2*)) andalso (wbTreeInvariantCheck(getLChild(T1)) andalso
+        wbTreeInvariantCheck(getRChild(T1))))
       end
 
-      fun avlTreeInvariantCheck(T1: tree): bool =
+      fun avlTreeInvariantCheck(Empty) = true
+        | avlTreeInvariantCheck(T1: tree): bool =
         let
           fun getH (Empty) = 0
             | getH (Node(_, Container(_, _, h), _)) = h
