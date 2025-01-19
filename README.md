@@ -37,6 +37,9 @@ Join-based parallel augmented map structure builder in Standard ML for testing d
   	
 *Customization of the tree involved at this step
 
+
 Sources:
+
 join-based functions: https://www.cs.cmu.edu/~guyb/papers/BFS16.pdf
+
 Parallel Augmented Maps: https://arxiv.org/abs/1612.05665
