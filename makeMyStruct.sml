@@ -27,6 +27,7 @@ structure MyTreeStruct : TREE =
       | combineAV (AV (av1), AV (av2)) : augVal = AV (av1 + av2)
   end;
 
+(* Create treap-based tree structure *)
 structure x1 = MakeTree1(MyTreeStruct);
 structure x2 = AddAVFSizeCheck(x1);
 structure x3 = AddRotates(x2);
