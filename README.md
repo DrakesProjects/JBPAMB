@@ -37,8 +37,6 @@ Join-based parallel augmented map structure builder in Standard ML for testing d
   	
 *Customization of the tree involved at this step
 
-
-Future steps:
-1.	Create a general function/functor which doesn’t require you to call all the functors every time you want to make a new data structure. Should ideally be 1 for all of them…
-2.	Create an automated randomized  tree builder to test out the trees
-
+Sources:
+join-based functions: https://www.cs.cmu.edu/~guyb/papers/BFS16.pdf
+Parallel Augmented Maps: https://arxiv.org/abs/1612.05665
